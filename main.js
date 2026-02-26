@@ -232,11 +232,43 @@ function connectVisualizer(analyser) {
             ctx.fillStyle = `rgb(${r},${g},${b})`;
             ctx.fillRect(x, 0, 1, 1);
         }
+
+        // Draw Target Frequency Lines (Mark & Space) for hardware debugging
+        if (decoder) {
+            const markRatio = decoder.markBin / analyser.frequencyBinCount;
+            const spaceRatio = decoder.spaceBin / analyser.frequencyBinCount;
+
+            // Map ratio back to our zoomed viewport
+            const markX = ((decoder.markBin - startBin) / range) * canvas.width;
+            const spaceX = ((decoder.spaceBin - startBin) / range) * canvas.width;
+
+            if (markX > 0 && markX < canvas.width) {
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.5)'; // Green for Mark (1)
+                ctx.fillRect(markX, 0, 2, 1);
+            }
+            if (spaceX > 0 && spaceX < canvas.width) {
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.5)'; // Red for Space (0)
+                ctx.fillRect(spaceX, 0, 2, 1);
+            }
+        }
     }
     drawWaterfall();
 }
 
+// --- File Handling (Images to Base64) ---
 fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
-    if (file) { logMessage(`FILE SELECTED: ${file.name} (${file.size} bytes)`); }
+    if (file) {
+        logMessage(`FILE SELECTED: ${file.name} (${file.size} bytes)`);
+
+        const reader = new FileReader();
+        reader.onload = function (event) {
+            // Convert file to Base64 string for audio transmission
+            const base64String = event.target.result;
+            const payloadInput = document.getElementById('payload-input');
+            payloadInput.value = base64String;
+            logMessage(`FILE ENCODED: Ready to transmit ${base64String.length} chars...`);
+        };
+        reader.readAsDataURL(file);
+    }
 });

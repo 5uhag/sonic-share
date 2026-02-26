@@ -34,8 +34,10 @@ export class Decoder {
         this.bitBuffer = [];
         this.isSyncLocked = false;
 
-        // Noise floor tracking
-        this.noiseThreshold = -70; // dB init threshold
+        this.isSyncLocked = false;
+
+        // Noise floor tracking - lowered significantly for phone mics
+        this.noiseThreshold = -85; // dB init threshold
         this.lastProcessTime = 0;
     }
 
@@ -80,11 +82,12 @@ export class Decoder {
         let bit = -1; // -1 means no clear signal
 
         // Dynamic thresholding: signal must be above noise and clearly defined
+        // Reduced the gap requirement from 5dB to 2dB for cheaper mics
         if (markMagnitude > this.noiseThreshold || spaceMagnitude > this.noiseThreshold) {
-            if (markMagnitude > spaceMagnitude + 5) {
+            if (markMagnitude > spaceMagnitude + 2) {
                 bit = 1;
                 this.lastProcessTime = timestamp; // Lock time to this reading
-            } else if (spaceMagnitude > markMagnitude + 5) {
+            } else if (spaceMagnitude > markMagnitude + 2) {
                 bit = 0;
                 this.lastProcessTime = timestamp; // Lock time to this reading
             }
@@ -112,8 +115,8 @@ export class Decoder {
             if (this.bitBuffer[i] === this.preamble[i]) correlation++;
         }
 
-        // 11/13 match is good enough for an acoustic noisy channel
-        if (correlation >= this.preamble.length - 2 && !this.isSyncLocked) {
+        // 10/13 match is more forgiving for loud room echo / cheap phone mics
+        if (correlation >= this.preamble.length - 3 && !this.isSyncLocked) {
             this.isSyncLocked = true;
             console.log("SYNC LOCKED: Barker preamble detected");
         }

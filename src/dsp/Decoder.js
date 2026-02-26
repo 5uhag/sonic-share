@@ -40,6 +40,9 @@ export class Decoder {
     }
 
     async startMicrophone() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error("Microphone API is not available. This is usually because the site is not running on HTTPS.");
+        }
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             this.source = this.ctx.createMediaStreamSource(stream);

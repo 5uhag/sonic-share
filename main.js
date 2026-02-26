@@ -169,7 +169,17 @@ btnListen.addEventListener('click', async () => {
         btnListen.style.color = "white";
         logMessage(`RX STARTED [${isAudible ? 'AUDIBLE' : 'ULTRASONIC'}] - Awaiting preamble...`);
         document.querySelector('.placeholder-text').innerText = "LISTENING ON MIC...";
-        await decoder.startMicrophone();
+        try {
+            await decoder.startMicrophone();
+        } catch (err) {
+            alert("Microphone Access Error: " + err.message + "\n\n(Note: Mobile browsers require HTTPS to use the mic. We just enabled an SSL plugin for your local dev server!)");
+            isListening = false;
+            btnListen.innerText = "START LISTENING";
+            btnListen.style.background = "";
+            btnListen.style.color = "";
+            logMessage(`RX ERROR: ${err.message}`);
+            document.querySelector('.placeholder-text').innerText = "WAITING FOR SIGNAL...";
+        }
     } else {
         btnListen.innerText = "START LISTENING";
         btnListen.style.background = "";

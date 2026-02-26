@@ -6,7 +6,7 @@
 ## Must-Haves (from SPEC)
 - [ ] Two-way FSK acoustic modem (encoder/decoder).
 - [ ] Offline-first PWA infrastructure (Service Worker).
-- [ ] Cold War-era retro UI (CRT, Knob, Spectrogram).
+- [ ] Neo-Brutalism UI (Encoder/Decoder, Spectrogram).
 - [ ] Error Correction (Hamming for text, Reed-Solomon for files).
 - [ ] Payload normalization (Base64) and framing (Barker codes).
 
@@ -14,7 +14,7 @@
 
 ### Phase 1: Foundation & Project Setup
 **Status**: ⬜ Not Started
-**Objective**: Initialize the project structure, PWA service worker, and basic UI layout for the Cold War dashboard.
+**Objective**: Initialize the project structure, PWA service worker, and basic UI layout for the Neo-Brutalism design.
 
 ### Phase 2: Core DSP & Physical Layer
 **Status**: ⬜ Not Started

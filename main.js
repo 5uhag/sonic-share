@@ -21,14 +21,17 @@ function initAudio() {
         // Connect visualizer canvas to the decoder's analyser node
         connectVisualizer(decoder.analyser);
 
-        decoder.onBitReceived = (bit, strength) => {
-            // Simple console log for Phase 2 validation to prevent UI freezing
-            console.log(`RX Bit: ${bit} (Strength: ${strength.toFixed(2)} dB)`);
+        decoder.onByteReceived = (char) => {
             const rxOutput = document.getElementById('rx-output');
             const p = rxOutput.querySelector('.placeholder-text');
             if (p) p.innerText = "";
-            rxOutput.innerHTML += bit;
+            rxOutput.innerHTML += char;
             rxOutput.scrollTop = rxOutput.scrollHeight;
+        };
+
+        // For debugging bits dropping in
+        decoder.onBitReceived = (bit, strength) => {
+            // console.log(`RX Bit: ${bit} (Strength: ${strength.toFixed(2)} dB)`);
         };
     }
 }
@@ -185,25 +188,39 @@ function connectVisualizer(analyser) {
 
     const freqData = new Uint8Array(analyser.frequencyBinCount);
 
+    // Fill initial canvas with black
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
     function drawWaterfall() {
         requestAnimationFrame(drawWaterfall);
         if (!isListening && (!encoder || audioCtx.state === 'suspended')) return;
 
         analyser.getByteFrequencyData(freqData);
 
-        const imageData = ctx.getImageData(1, 0, canvas.width - 1, canvas.height);
-        ctx.putImageData(imageData, 0, 0);
+        // Shift old waterfall down by 1px
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height - 1);
+        ctx.putImageData(imageData, 0, 1);
 
-        for (let i = 0; i < canvas.height; i++) {
-            const dataIndex = Math.floor((canvas.height - i) / canvas.height * (freqData.length / 4));
+        // Draw new row of frequencies at the top (idx 0)
+        // Only map the relevant portion of the spectrum to make it visible
+        const startBin = Math.floor(analyser.frequencyBinCount * 0.05); // skip sub-bass
+        const endBin = Math.floor(analyser.frequencyBinCount * 0.95);
+        const range = endBin - startBin;
+
+        for (let x = 0; x < canvas.width; x++) {
+            const dataIndex = startBin + Math.floor((x / canvas.width) * range);
             const value = freqData[dataIndex];
 
-            const r = value;
-            const g = value > 128 ? 255 : value * 2;
-            const b = 0;
+            // Heatmap color scaling (Black -> Blue -> Red -> Yellow)
+            let r = 0, g = 0, b = 0;
+            if (value < 64) { b = value * 4; }
+            else if (value < 128) { r = (value - 64) * 4; b = 255 - (value - 64) * 4; }
+            else if (value < 192) { r = 255; g = (value - 128) * 4; }
+            else { r = 255; g = 255; b = (value - 192) * 4; }
 
             ctx.fillStyle = `rgb(${r},${g},${b})`;
-            ctx.fillRect(canvas.width - 1, i, 1, 1);
+            ctx.fillRect(x, 0, 1, 1);
         }
     }
     drawWaterfall();

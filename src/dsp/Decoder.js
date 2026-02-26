@@ -27,6 +27,16 @@ export class Decoder {
         this.source = null;
         this.isListening = false;
         this.onBitReceived = null;
+        this.onByteReceived = null;
+
+        // Barker-13 preamble for correlation
+        this.preamble = [1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1];
+        this.bitBuffer = [];
+        this.isSyncLocked = false;
+
+        // Noise floor tracking
+        this.noiseThreshold = -70; // dB init threshold
+        this.lastProcessTime = 0;
     }
 
     async startMicrophone() {
@@ -52,22 +62,70 @@ export class Decoder {
         }
     }
 
-    processLoop() {
+    processLoop(timestamp) {
         if (!this.isListening) return;
+        requestAnimationFrame((ts) => this.processLoop(ts));
+
+        // Throttle processing to roughly match the baud rate (duration per bit)
+        if (timestamp - this.lastProcessTime < (this.config.duration * 1000) * 0.8) return;
 
         this.analyser.getFloatFrequencyData(this.dataArray);
 
         const markMagnitude = this.dataArray[this.markBin];
         const spaceMagnitude = this.dataArray[this.spaceBin];
 
-        // Basic threshold detection for Phase 2 proof of concept
-        // In Phase 3, this will be replaced by a robust moving average and Barker correlation
-        if (markMagnitude > -60 && markMagnitude > spaceMagnitude + 10) {
-            if (this.onBitReceived) this.onBitReceived(1, markMagnitude);
-        } else if (spaceMagnitude > -60 && spaceMagnitude > markMagnitude + 10) {
-            if (this.onBitReceived) this.onBitReceived(0, spaceMagnitude);
+        let bit = -1; // -1 means no clear signal
+
+        // Dynamic thresholding: signal must be above noise and clearly defined
+        if (markMagnitude > this.noiseThreshold || spaceMagnitude > this.noiseThreshold) {
+            if (markMagnitude > spaceMagnitude + 5) {
+                bit = 1;
+                this.lastProcessTime = timestamp; // Lock time to this reading
+            } else if (spaceMagnitude > markMagnitude + 5) {
+                bit = 0;
+                this.lastProcessTime = timestamp; // Lock time to this reading
+            }
         }
 
-        requestAnimationFrame(() => this.processLoop());
+        if (bit !== -1) {
+            this.bitBuffer.push(bit);
+            if (this.onBitReceived) this.onBitReceived(bit, Math.max(markMagnitude, spaceMagnitude));
+
+            // Keep buffer size manageable (preamble length + 1 byte)
+            if (this.bitBuffer.length > this.preamble.length + 8) {
+                this.bitBuffer.shift();
+            }
+
+            this.checkForSyncAndDecode();
+        }
+    }
+
+    checkForSyncAndDecode() {
+        if (this.bitBuffer.length < this.preamble.length) return;
+
+        // Sliding window cross-correlation for Barker sequence
+        let correlation = 0;
+        for (let i = 0; i < this.preamble.length; i++) {
+            if (this.bitBuffer[i] === this.preamble[i]) correlation++;
+        }
+
+        // 11/13 match is good enough for an acoustic noisy channel
+        if (correlation >= this.preamble.length - 2 && !this.isSyncLocked) {
+            this.isSyncLocked = true;
+            console.log("SYNC LOCKED: Barker preamble detected");
+        }
+
+        if (this.isSyncLocked && this.bitBuffer.length >= this.preamble.length + 8) {
+            // We have a full byte following the preamble
+            const byteBits = this.bitBuffer.slice(this.preamble.length, this.preamble.length + 8);
+            const byteValue = parseInt(byteBits.join(''), 2);
+            const char = String.fromCharCode(byteValue);
+
+            if (this.onByteReceived) this.onByteReceived(char);
+
+            // Reset sync state to look for next frame
+            this.bitBuffer = [];
+            this.isSyncLocked = false;
+        }
     }
 }

@@ -1,5 +1,38 @@
 import './style.css'
 
+import { Encoder } from './src/dsp/Encoder.js';
+import { Decoder } from './src/dsp/Decoder.js';
+
+let audioCtx = null;
+let encoder = null;
+let decoder = null;
+
+function initAudio() {
+    if (!audioCtx) {
+        // AudioContext must be resumed/created after a user gesture
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Default configs based on current UI state
+        const config = isAudible ? { mark: 3000, space: 2500, duration: 0.1 } : { mark: 19500, space: 18500, duration: 0.1 };
+
+        encoder = new Encoder(audioCtx, config);
+        decoder = new Decoder(audioCtx, config);
+
+        // Connect visualizer canvas to the decoder's analyser node
+        connectVisualizer(decoder.analyser);
+
+        decoder.onBitReceived = (bit, strength) => {
+            // Simple console log for Phase 2 validation to prevent UI freezing
+            console.log(`RX Bit: ${bit} (Strength: ${strength.toFixed(2)} dB)`);
+            const rxOutput = document.getElementById('rx-output');
+            const p = rxOutput.querySelector('.placeholder-text');
+            if (p) p.innerText = "";
+            rxOutput.innerHTML += bit;
+            rxOutput.scrollTop = rxOutput.scrollHeight;
+        };
+    }
+}
+
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').then((registration) => {
@@ -68,9 +101,15 @@ function drawKnob(angle) {
     knobCtx.lineTo(indX, indY); knobCtx.lineWidth = 6; knobCtx.stroke();
 
     if (Math.abs(angle) > Math.PI / 2) {
-        if (isAudible) { isAudible = false; bandDisplay.innerText = "ULTRASONIC (18-21kHz)"; bandDisplay.style.background = "#000"; }
+        if (isAudible) {
+            isAudible = false; bandDisplay.innerText = "ULTRASONIC (18-21kHz)"; bandDisplay.style.background = "#000";
+            if (encoder) encoder.config = { ...encoder.config, mark: 19500, space: 18500 };
+        }
     } else {
-        if (!isAudible) { isAudible = true; bandDisplay.innerText = "AUDIBLE (1-5kHz)"; bandDisplay.style.background = "var(--accent-1)"; }
+        if (!isAudible) {
+            isAudible = true; bandDisplay.innerText = "AUDIBLE (1-5kHz)"; bandDisplay.style.background = "var(--accent-1)";
+            if (encoder) encoder.config = { ...encoder.config, mark: 3000, space: 2500 };
+        }
     }
 }
 
@@ -98,14 +137,28 @@ function logMessage(msg) {
 }
 
 btnTransmit.addEventListener('click', () => {
+    initAudio();
     const payload = document.getElementById('payload-input').value;
     if (!payload.trim()) return alert("Enter a message to transmit.");
     logMessage(`TX STARTED [${isAudible ? 'AUDIBLE' : 'ULTRASONIC'}]: ${payload.substring(0, 15)}...`);
+
+    // Very basic text-to-binary mapping for Phase 2 validation
+    const bits = [];
+    for (let i = 0; i < payload.length; i++) {
+        const bin = payload.charCodeAt(i).toString(2).padStart(8, '0');
+        for (let j = 0; j < 8; j++) bits.push(parseInt(bin[j]));
+    }
+
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    encoder.generateSignal(bits);
 });
 
 const btnListen = document.getElementById('btn-listen');
 let isListening = false;
-btnListen.addEventListener('click', () => {
+btnListen.addEventListener('click', async () => {
+    initAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
     isListening = !isListening;
     if (isListening) {
         btnListen.innerText = "STOP LISTENING";
@@ -113,14 +166,48 @@ btnListen.addEventListener('click', () => {
         btnListen.style.color = "white";
         logMessage(`RX STARTED [${isAudible ? 'AUDIBLE' : 'ULTRASONIC'}] - Awaiting preamble...`);
         document.querySelector('.placeholder-text').innerText = "LISTENING ON MIC...";
+        await decoder.startMicrophone();
     } else {
         btnListen.innerText = "START LISTENING";
         btnListen.style.background = "";
         btnListen.style.color = "";
         logMessage("RX STOPPED.");
         document.querySelector('.placeholder-text').innerText = "WAITING FOR SIGNAL...";
+        decoder.stopMicrophone();
     }
 });
+
+function connectVisualizer(analyser) {
+    const canvas = document.getElementById('spectrogram');
+    const ctx = canvas.getContext('2d');
+    canvas.width = canvas.parentElement.clientWidth;
+    canvas.height = canvas.parentElement.clientHeight;
+
+    const freqData = new Uint8Array(analyser.frequencyBinCount);
+
+    function drawWaterfall() {
+        requestAnimationFrame(drawWaterfall);
+        if (!isListening && (!encoder || audioCtx.state === 'suspended')) return;
+
+        analyser.getByteFrequencyData(freqData);
+
+        const imageData = ctx.getImageData(1, 0, canvas.width - 1, canvas.height);
+        ctx.putImageData(imageData, 0, 0);
+
+        for (let i = 0; i < canvas.height; i++) {
+            const dataIndex = Math.floor((canvas.height - i) / canvas.height * (freqData.length / 4));
+            const value = freqData[dataIndex];
+
+            const r = value;
+            const g = value > 128 ? 255 : value * 2;
+            const b = 0;
+
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.fillRect(canvas.width - 1, i, 1, 1);
+        }
+    }
+    drawWaterfall();
+}
 
 fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];

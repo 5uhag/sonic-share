@@ -13,6 +13,19 @@
     --font-mono: 'Space Mono', monospace;
 }
 
+[data-theme="dark"] {
+    --bg-color: #121212;
+    --text-main: #ffffff;
+    --panel-bg: #1e1e1e;
+    --accent-1: #ff5e1a;
+    --accent-2: #ffea00;
+    --accent-3: #00e5ff;
+
+    --border-thick: 4px solid var(--text-main);
+    --shadow-brutal: 6px 6px 0px var(--accent-3);
+    --shadow-brutal-hover: 2px 2px 0px var(--accent-3);
+}
+
 * {
     box-sizing: border-box;
     margin: 0;
@@ -28,6 +41,7 @@ body {
     justify-content: center;
     align-items: center;
     padding: 20px;
+    transition: background-color 0.2s, color 0.2s;
 }
 
 #app {
@@ -46,6 +60,31 @@ body {
     border: var(--border-thick);
     padding: 15px 30px;
     box-shadow: var(--shadow-brutal);
+    color: #000;
+}
+
+[data-theme="dark"] .brutal-header {
+    background-color: var(--panel-bg);
+    color: var(--text-main);
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.theme-btn {
+    padding: 5px 15px;
+    font-size: 1rem;
+    background-color: var(--text-main);
+    color: var(--panel-bg);
+    box-shadow: 2px 2px 0px var(--accent-1);
+}
+
+[data-theme="dark"] .theme-btn {
+    background-color: var(--accent-2);
+    color: #000;
 }
 
 .brutal-header h1 {
@@ -62,14 +101,24 @@ body {
     font-weight: 700;
     background: var(--panel-bg);
     padding: 5px 15px;
-    border: 2px solid var(--text-main);
+    border: 2px solid #000;
+    color: var(--text-main);
+}
+
+[data-theme="dark"] .status-indicator {
+    background: #000;
+    border-color: var(--text-main);
 }
 
 .dot {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    border: 2px solid var(--text-main);
+    border: 2px solid #000;
+}
+
+[data-theme="dark"] .dot {
+    border-color: #000;
 }
 
 .dot.offline {
@@ -117,6 +166,10 @@ body {
     justify-content: center;
     align-items: center;
     min-height: 400px;
+}
+
+[data-theme="dark"] .section-viz .canvas-container {
+    background-color: #2a2a2a;
 }
 
 #spectrogram {
@@ -173,10 +226,12 @@ body {
     resize: vertical;
     min-height: 100px;
     outline: none;
+    background: var(--panel-bg);
+    color: var(--text-main);
 }
 
 .brutal-input:focus {
-    background-color: #f9f9f9;
+    background-color: var(--bg-color);
 }
 
 .button-row {
@@ -203,7 +258,8 @@ body {
 }
 
 .brutal-btn.secondary {
-    background-color: var(--bg-color);
+    background-color: var(--panel-bg);
+    color: var(--text-main);
 }
 
 .brutal-btn:hover {

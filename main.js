@@ -19,6 +19,28 @@ const bandDisplay = document.getElementById('current-band');
 const rxLog = document.getElementById('rx-log');
 const btnTransmit = document.getElementById('btn-transmit');
 const fileInput = document.getElementById('file-input');
+const themeBtn = document.getElementById('theme-toggle');
+
+// --- Theme Toggling ---
+let isDark = localStorage.getItem('theme') === 'dark';
+if (isDark) {
+    document.body.setAttribute('data-theme', 'dark');
+    themeBtn.innerText = 'LIGHT';
+}
+
+themeBtn.addEventListener('click', () => {
+    isDark = !isDark;
+    if (isDark) {
+        document.body.setAttribute('data-theme', 'dark');
+        themeBtn.innerText = 'LIGHT';
+        localStorage.setItem('theme', 'dark');
+    } else {
+        document.body.removeAttribute('data-theme');
+        themeBtn.innerText = 'DARK';
+        localStorage.setItem('theme', 'light');
+    }
+    drawKnob(knobAngle); // force redraw with new colors
+});
 
 let isAudible = true;
 let knobAngle = 0;
@@ -31,9 +53,15 @@ function drawKnob(angle) {
     const radius = 45;
 
     knobCtx.clearRect(0, 0, width, height);
-    knobCtx.beginPath(); knobCtx.arc(cx, cy, radius + 5, 0, 2 * Math.PI); knobCtx.fillStyle = '#000'; knobCtx.fill();
-    knobCtx.beginPath(); knobCtx.arc(cx, cy, radius, 0, 2 * Math.PI); knobCtx.fillStyle = '#fff'; knobCtx.fill();
-    knobCtx.lineWidth = 4; knobCtx.strokeStyle = '#000'; knobCtx.stroke();
+
+    // use CSS variables for canvas drawing to match theme
+    const computedStyle = getComputedStyle(document.body);
+    const textMain = computedStyle.getPropertyValue('--text-main').trim();
+    const panelBg = computedStyle.getPropertyValue('--panel-bg').trim();
+
+    knobCtx.beginPath(); knobCtx.arc(cx, cy, radius + 5, 0, 2 * Math.PI); knobCtx.fillStyle = textMain; knobCtx.fill();
+    knobCtx.beginPath(); knobCtx.arc(cx, cy, radius, 0, 2 * Math.PI); knobCtx.fillStyle = panelBg; knobCtx.fill();
+    knobCtx.lineWidth = 4; knobCtx.strokeStyle = textMain; knobCtx.stroke();
     knobCtx.beginPath(); knobCtx.moveTo(cx, cy);
     const indX = cx + Math.cos(angle) * (radius - 10);
     const indY = cy + Math.sin(angle) * (radius - 10);

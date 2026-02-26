@@ -14,7 +14,7 @@
 <body>
   <div id="app">
     <header class="brutal-header">
-      <div class="header-left">
+      <div class="header-left" style="display:flex; align-items:center; gap:20px;">
         <h1>SONIC-LINK</h1>
         <button id="theme-toggle" class="brutal-btn theme-btn">DARK</button>
       </div>
@@ -25,6 +25,8 @@
     </header>
 
     <main class="dashboard">
+
+      <!-- Left Panel: Visualization -->
       <section class="brutal-panel section-viz">
         <div class="panel-header">SPECTROGRAM</div>
         <div class="canvas-container">
@@ -32,6 +34,7 @@
         </div>
       </section>
 
+      <!-- Right Panel: Controls & I/O -->
       <section class="brutal-panel section-controls">
         <div class="panel-header">TRANSCEIVER CONTROLS</div>
 
@@ -43,8 +46,9 @@
           <p id="current-band" class="band-display">AUDIBLE (1-5kHz)</p>
         </div>
 
+        <!-- ENCODER (TX) -->
         <div class="control-group io">
-          <label>PAYLOAD</label>
+          <label>ENCODER (TRANSMIT)</label>
           <textarea id="payload-input" class="brutal-input" placeholder="ENTER MESSAGE TO TRANSMIT..."></textarea>
 
           <div class="button-row">
@@ -56,13 +60,26 @@
           </div>
         </div>
 
+        <!-- DECODER (RX) -->
+        <div class="control-group io decoder-section">
+          <label>DECODER (RECEIVE)</label>
+          <div id="rx-output" class="brutal-output">
+            <p class="placeholder-text">WAITING FOR SIGNAL...</p>
+            <!-- Received text or img will be injected here -->
+          </div>
+          <div class="button-row">
+            <button id="btn-listen" class="brutal-btn warning">START LISTENING</button>
+          </div>
+        </div>
+
         <div class="control-group log">
-          <label>RECEIVER LOG</label>
+          <label>SYSTEM LOG</label>
           <div id="rx-log" class="brutal-log">
-            <span>[SYSTEM] AWAITING SIGNAL...</span>
+            <span>[SYSTEM] INITIALIZED...</span>
           </div>
         </div>
       </section>
+
     </main>
   </div>
   <script type="module" src="/main.js"></script>

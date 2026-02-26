@@ -103,6 +103,25 @@ btnTransmit.addEventListener('click', () => {
     logMessage(`TX STARTED [${isAudible ? 'AUDIBLE' : 'ULTRASONIC'}]: ${payload.substring(0, 15)}...`);
 });
 
+const btnListen = document.getElementById('btn-listen');
+let isListening = false;
+btnListen.addEventListener('click', () => {
+    isListening = !isListening;
+    if (isListening) {
+        btnListen.innerText = "STOP LISTENING";
+        btnListen.style.background = "red";
+        btnListen.style.color = "white";
+        logMessage(`RX STARTED [${isAudible ? 'AUDIBLE' : 'ULTRASONIC'}] - Awaiting preamble...`);
+        document.querySelector('.placeholder-text').innerText = "LISTENING ON MIC...";
+    } else {
+        btnListen.innerText = "START LISTENING";
+        btnListen.style.background = "";
+        btnListen.style.color = "";
+        logMessage("RX STOPPED.");
+        document.querySelector('.placeholder-text').innerText = "WAITING FOR SIGNAL...";
+    }
+});
+
 fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) { logMessage(`FILE SELECTED: ${file.name} (${file.size} bytes)`); }

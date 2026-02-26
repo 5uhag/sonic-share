@@ -303,3 +303,28 @@ body {
     flex-direction: column;
     gap: 5px;
 }
+
+/* DECODER STYLES */
+.brutal-output {
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    padding: 15px;
+    border: 2px solid var(--text-main);
+    min-height: 100px;
+    background: var(--panel-bg);
+    color: var(--text-main);
+    overflow-y: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.brutal-output .placeholder-text {
+    color: #888;
+    font-style: italic;
+}
+
+.brutal-btn.warning {
+    background-color: var(--accent-2);
+    color: #000;
+}

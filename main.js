@@ -2,10 +2,12 @@ import './style.css'
 
 import { Encoder } from './src/dsp/Encoder.js';
 import { Decoder } from './src/dsp/Decoder.js';
+import { SSTVEncoder } from './src/dsp/SSTVEncoder.js';
 
 let audioCtx = null;
 let encoder = null;
 let decoder = null;
+let sstvEncoder = null;
 
 function initAudio() {
     if (!audioCtx) {
@@ -17,6 +19,7 @@ function initAudio() {
 
         encoder = new Encoder(audioCtx, config);
         decoder = new Decoder(audioCtx, config);
+        sstvEncoder = new SSTVEncoder(audioCtx);
 
         // Connect visualizer canvas to the decoder's analyser node
         connectVisualizer(decoder.analyser);
@@ -139,123 +142,9 @@ function logMessage(msg) {
     rxLog.scrollTop = rxLog.scrollHeight;
 }
 
-btnTransmit.addEventListener('click', () => {
-    initAudio();
-    const payload = document.getElementById('payload-input').value;
-    if (!payload.trim()) return alert("Enter a message to transmit.");
-    logMessage(`TX STARTED [${isAudible ? 'AUDIBLE' : 'ULTRASONIC'}]: ${payload.substring(0, 15)}...`);
-
-    // Very basic text-to-binary mapping for Phase 2 validation
-    const bits = [];
-    for (let i = 0; i < payload.length; i++) {
-        const bin = payload.charCodeAt(i).toString(2).padStart(8, '0');
-        for (let j = 0; j < 8; j++) bits.push(parseInt(bin[j]));
-    }
-
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    encoder.generateSignal(bits);
-});
-
-const btnListen = document.getElementById('btn-listen');
-let isListening = false;
-btnListen.addEventListener('click', async () => {
-    initAudio();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-
-    isListening = !isListening;
-    if (isListening) {
-        btnListen.innerText = "STOP LISTENING";
-        btnListen.style.background = "red";
-        btnListen.style.color = "white";
-        logMessage(`RX STARTED [${isAudible ? 'AUDIBLE' : 'ULTRASONIC'}] - Awaiting preamble...`);
-        document.querySelector('.placeholder-text').innerText = "LISTENING ON MIC...";
-        try {
-            await decoder.startMicrophone();
-        } catch (err) {
-            alert("Microphone Access Error: " + err.message + "\n\n(Note: Mobile browsers require HTTPS to use the mic. We just enabled an SSL plugin for your local dev server!)");
-            isListening = false;
-            btnListen.innerText = "START LISTENING";
-            btnListen.style.background = "";
-            btnListen.style.color = "";
-            logMessage(`RX ERROR: ${err.message}`);
-            document.querySelector('.placeholder-text').innerText = "WAITING FOR SIGNAL...";
-        }
-    } else {
-        btnListen.innerText = "START LISTENING";
-        btnListen.style.background = "";
-        btnListen.style.color = "";
-        logMessage("RX STOPPED.");
-        document.querySelector('.placeholder-text').innerText = "WAITING FOR SIGNAL...";
-        decoder.stopMicrophone();
-    }
-});
-
-function connectVisualizer(analyser) {
-    const canvas = document.getElementById('spectrogram');
-    const ctx = canvas.getContext('2d');
-    canvas.width = canvas.parentElement.clientWidth;
-    canvas.height = canvas.parentElement.clientHeight;
-
-    const freqData = new Uint8Array(analyser.frequencyBinCount);
-
-    // Fill initial canvas with black
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    function drawWaterfall() {
-        requestAnimationFrame(drawWaterfall);
-        if (!isListening && (!encoder || audioCtx.state === 'suspended')) return;
-
-        analyser.getByteFrequencyData(freqData);
-
-        // Shift old waterfall down by 1px
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height - 1);
-        ctx.putImageData(imageData, 0, 1);
-
-        // Draw new row of frequencies at the top (idx 0)
-        // Only map the relevant portion of the spectrum to make it visible
-        const startBin = Math.floor(analyser.frequencyBinCount * 0.05); // skip sub-bass
-        const endBin = Math.floor(analyser.frequencyBinCount * 0.95);
-        const range = endBin - startBin;
-
-        for (let x = 0; x < canvas.width; x++) {
-            const dataIndex = startBin + Math.floor((x / canvas.width) * range);
-            const value = freqData[dataIndex];
-
-            // Heatmap color scaling (Black -> Blue -> Red -> Yellow)
-            let r = 0, g = 0, b = 0;
-            if (value < 64) { b = value * 4; }
-            else if (value < 128) { r = (value - 64) * 4; b = 255 - (value - 64) * 4; }
-            else if (value < 192) { r = 255; g = (value - 128) * 4; }
-            else { r = 255; g = 255; b = (value - 192) * 4; }
-
-            ctx.fillStyle = `rgb(${r},${g},${b})`;
-            ctx.fillRect(x, 0, 1, 1);
-        }
-
-        // Draw Target Frequency Lines (Mark & Space) for hardware debugging
-        if (decoder) {
-            const markRatio = decoder.markBin / analyser.frequencyBinCount;
-            const spaceRatio = decoder.spaceBin / analyser.frequencyBinCount;
-
-            // Map ratio back to our zoomed viewport
-            const markX = ((decoder.markBin - startBin) / range) * canvas.width;
-            const spaceX = ((decoder.spaceBin - startBin) / range) * canvas.width;
-
-            if (markX > 0 && markX < canvas.width) {
-                ctx.fillStyle = 'rgba(0, 255, 0, 0.5)'; // Green for Mark (1)
-                ctx.fillRect(markX, 0, 2, 1);
-            }
-            if (spaceX > 0 && spaceX < canvas.width) {
-                ctx.fillStyle = 'rgba(255, 0, 0, 0.5)'; // Red for Space (0)
-                ctx.fillRect(spaceX, 0, 2, 1);
-            }
-        }
-    }
-    drawWaterfall();
-}
-
 // --- File Handling (Images to Base64) ---
+let currentImageData = null;
+
 fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -263,12 +152,59 @@ fileInput.addEventListener('change', (e) => {
 
         const reader = new FileReader();
         reader.onload = function (event) {
-            // Convert file to Base64 string for audio transmission
-            const base64String = event.target.result;
-            const payloadInput = document.getElementById('payload-input');
-            payloadInput.value = base64String;
-            logMessage(`FILE ENCODED: Ready to transmit ${base64String.length} chars...`);
+
+            // If it's an image, prepare it for SSTV transmission (320x256)
+            if (file.type.startsWith('image/')) {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 320;
+                    canvas.height = 256;
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+                    // Force resize to match SSTV S1 specs
+                    ctx.drawImage(img, 0, 0, 320, 256);
+                    currentImageData = ctx.getImageData(0, 0, 320, 256);
+
+                    document.getElementById('payload-input').value = `[IMAGE LOADED FOR SSTV: ${file.name}]`;
+                    logMessage(`IMAGE ENCODED: Ready for SSTV Scottie S1 Transmission`);
+                };
+                img.src = event.target.result;
+            } else {
+                // For standard text/files, fallback to Base64 (original FSK logic)
+                currentImageData = null;
+                const base64String = event.target.result;
+                const payloadInput = document.getElementById('payload-input');
+                payloadInput.value = base64String;
+                logMessage(`FILE ENCODED: Ready to transmit ${base64String.length} chars via FSK...`);
+            }
         };
         reader.readAsDataURL(file);
+    }
+});
+
+btnTransmit.addEventListener('click', () => {
+    initAudio();
+    const payload = document.getElementById('payload-input').value;
+    if (!payload.trim() && !currentImageData) return alert("Enter a message or select an image to transmit.");
+
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    if (currentImageData) {
+        // IMAGE TRANSMISSION: Use SSTV Protocol
+        logMessage(`TX SSTV STARTED [Scottie S1]: ~111 seconds...`);
+        sstvEncoder.generateSignal(currentImageData, () => {
+            logMessage(`TX SSTV COMPLETE.`);
+        });
+    } else {
+        // TEXT TRANSMISSION: Use Custom FSK System
+        logMessage(`TX FSK STARTED [${isAudible ? 'AUDIBLE' : 'ULTRASONIC'}]: ${payload.substring(0, 15)}...`);
+        // Very basic text-to-binary mapping for Phase 2 validation
+        const bits = [];
+        for (let i = 0; i < payload.length; i++) {
+            const bin = payload.charCodeAt(i).toString(2).padStart(8, '0');
+            for (let j = 0; j < 8; j++) bits.push(parseInt(bin[j]));
+        }
+        encoder.generateSignal(bits);
     }
 });
